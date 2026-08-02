@@ -26,6 +26,11 @@ class ChatRequest(BaseModel):
     message: str
 
 
+@app.get("/health")
+async def health():
+    return {"ok": True}
+
+
 @app.get("/")
 async def root():
     return {"message": "SmartLearn Lite API is running"}
