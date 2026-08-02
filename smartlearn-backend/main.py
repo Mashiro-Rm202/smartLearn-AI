@@ -1,5 +1,4 @@
 import os
-import traceback
 
 from fastapi import FastAPI, File, UploadFile, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,12 +10,11 @@ from services.pdf import extract_pages
 
 app = FastAPI(title="SmartLearn Lite API")
 
-ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173").split(",")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS if ALLOWED_ORIGINS != ["*"] else ["*"],
-    allow_origin_regex=r".*" if ALLOWED_ORIGINS == ["*"] else None,
+    allow_origins=ALLOWED_ORIGINS,
     allow_methods=["GET", "POST"],
 )
 
@@ -81,11 +79,6 @@ async def chat(chat_id: str = Query(...), body: ChatRequest = ...):
         answer = answer_from_pages(chat_store[chat_id], body.message)
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=f"Upstream LLM error: {e}")
-    except HTTPException:
-        raise
-    except Exception as e:
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Internal error: {e}")
 
     return {
         "chat_id": chat_id,
