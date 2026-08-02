@@ -1,0 +1,11 @@
+# Railway monorepo — two services from one repo
+# Create both services in Railway dashboard with the Root Directory settings below.
+
+[build]
+builder = "nixpacks"
+
+[services.backend]
+watch = ["smartlearn-backend/**"]
+
+[services.frontend]
+watch = ["smartlearn-frontend/**"]
