@@ -1358,6 +1358,7 @@ def answer_document(
     top_k: int = 3,
     candidate_pool: int = 60,
     answer_model: str = "",
+    smart_mode: bool = False,
 ) -> dict[str, Any]:
     """Answer one question using retrieved evidence.
 
@@ -1394,25 +1395,53 @@ def answer_document(
             search_question = f"{previous_question}\nFollow-up: {question}"
 
     api_key = os.getenv("OPENROUTER_API_KEY")
-    retrieval_question = search_question
-    if (
-        api_key
-        and re.search(r"[一-鿿]", search_question)
-        and _document_is_predominantly_latin(document.get("pages", []))
-    ):
-        retrieval_question = _rewrite_cross_language_query(
-            search_question,
-            api_key=api_key,
-            answer_model=answer_model,
-        )
+    hits: list[dict] = []
+    smart_plan = None
+    if smart_mode and api_key:
+        from services.smart_query import merge_ranked_hits, plan_smart_query
 
-    hits = search_document(
-        retrieval_question,
-        document,
-        top_k=top_k,
-        candidate_pool=candidate_pool,
-        preferred_pages=preferred_pages,
-    )
+        smart_plan = plan_smart_query(
+            question=search_question,
+            pages=document.get("pages", []),
+            history=history,
+            api_key=api_key,
+            model=answer_model,
+        )
+        if smart_plan:
+            ranked_results = [
+                search_document(
+                    query,
+                    document,
+                    top_k=max(top_k * 2, 6),
+                    candidate_pool=candidate_pool,
+                    preferred_pages=preferred_pages,
+                )
+                for query in smart_plan.search_queries
+            ]
+            hits = merge_ranked_hits(ranked_results, top_k=top_k)
+
+    # Standard mode, or a transparent fallback when the optional planner is
+    # unavailable.  This is the pre-existing retrieval path.
+    if not hits:
+        retrieval_question = search_question
+        if (
+            api_key
+            and re.search(r"[一-鿿]", search_question)
+            and _document_is_predominantly_latin(document.get("pages", []))
+        ):
+            retrieval_question = _rewrite_cross_language_query(
+                search_question,
+                api_key=api_key,
+                answer_model=answer_model,
+            )
+
+        hits = search_document(
+            retrieval_question,
+            document,
+            top_k=top_k,
+            candidate_pool=candidate_pool,
+            preferred_pages=preferred_pages,
+        )
 
     if not hits:
         answer = (
@@ -1521,6 +1550,7 @@ def answer_document_turn(
     top_k: int = 3,
     candidate_pool: int = 60,
     answer_model: str = "",
+    smart_mode: bool = False,
 ) -> dict[str, Any]:
     """Answer one question and append the turn to the document's history.
 
@@ -1534,6 +1564,7 @@ def answer_document_turn(
         top_k=top_k,
         candidate_pool=candidate_pool,
         answer_model=answer_model,
+        smart_mode=smart_mode,
     )
     result["history"] = append_history(document, question, result)
     return result
@@ -1545,6 +1576,7 @@ def answer_chat_turn(
     top_k: int = 3,
     candidate_pool: int = 60,
     answer_model: str = "",
+    smart_mode: bool = False,
 ) -> dict[str, Any]:
     """Route-facing alias for :func:`answer_document_turn`.
 
@@ -1557,6 +1589,7 @@ def answer_chat_turn(
         top_k=top_k,
         candidate_pool=candidate_pool,
         answer_model=answer_model,
+        smart_mode=smart_mode,
     )
 
 

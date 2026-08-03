@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
+import SmartModeToggle from './SmartModeToggle.jsx'
 
 export default function ChatPanel({ enabled, onBusy, disabled, onJumpToPage }) {
   const [message, setMessage] = useState('')
   const [messages, setMessages] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [smartMode, setSmartMode] = useState(false)
   const messagesEndRef = useRef(null)
 
   useEffect(() => {
@@ -30,7 +32,7 @@ export default function ChatPanel({ enabled, onBusy, disabled, onJumpToPage }) {
 
     try {
       const { askQuestion } = await import('./api.js')
-      const result = await askQuestion(text)
+      const result = await askQuestion(text, smartMode)
       const assistantMsg = {
         role: 'assistant',
         content: result.answer,
@@ -57,10 +59,17 @@ export default function ChatPanel({ enabled, onBusy, disabled, onJumpToPage }) {
           <span className="panel-eyebrow">AI workspace</span>
           <strong>Document chat</strong>
         </div>
-        <span className={`connection-state ${enabled ? 'ready' : ''}`}>
-          <span aria-hidden="true" />
-          {enabled ? 'Ready' : 'Waiting for PDF'}
-        </span>
+        <div className="chat-header-actions">
+          <SmartModeToggle
+            enabled={smartMode}
+            disabled={loading || disabled}
+            onChange={setSmartMode}
+          />
+          <span className={`connection-state ${enabled ? 'ready' : ''}`}>
+            <span aria-hidden="true" />
+            {enabled ? 'Ready' : 'Waiting for PDF'}
+          </span>
+        </div>
       </div>
 
       <div className="chat-messages">

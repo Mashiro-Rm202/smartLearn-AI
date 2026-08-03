@@ -18,11 +18,11 @@ export async function uploadPDF(file) {
   return res.json()
 }
 
-export async function askQuestion(message) {
+export async function askQuestion(message, smartMode = false) {
   const res = await fetch(`${API}/chat?chat_id=${encodeURIComponent(CHAT_ID)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message, chat_id: CHAT_ID }),
+    body: JSON.stringify({ message, chat_id: CHAT_ID, smart_mode: smartMode }),
   })
 
   if (!res.ok) {

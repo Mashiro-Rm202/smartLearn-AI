@@ -40,6 +40,7 @@ UPLOAD_ROOT = os.path.join(
 
 class ChatRequest(BaseModel):
     message: str
+    smart_mode: bool = False
 
 
 @app.get("/health")
@@ -116,7 +117,11 @@ async def chat(chat_id: str = Query(...), body: ChatRequest = ...):
         raise HTTPException(status_code=400, detail="Message cannot be empty")
 
     try:
-        result = answer_chat_turn(documents[chat_id], body.message)
+        result = answer_chat_turn(
+            documents[chat_id],
+            body.message,
+            smart_mode=body.smart_mode,
+        )
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=f"Upstream LLM error: {e}")
 
