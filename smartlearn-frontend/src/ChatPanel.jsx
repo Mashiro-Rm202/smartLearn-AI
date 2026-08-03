@@ -1,10 +1,15 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 export default function ChatPanel({ enabled, onBusy, disabled, onJumpToPage }) {
   const [message, setMessage] = useState('')
   const [messages, setMessages] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const messagesEndRef = useRef(null)
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+  }, [messages, loading])
 
   // Clear local messages when a new upload remounts this panel
   // (enabled flips from false→true on upload success, key={uploadKey} from App)
@@ -47,9 +52,24 @@ export default function ChatPanel({ enabled, onBusy, disabled, onJumpToPage }) {
 
   return (
     <section className="chat-panel">
+      <div className="chat-header">
+        <div>
+          <span className="panel-eyebrow">AI workspace</span>
+          <strong>Document chat</strong>
+        </div>
+        <span className={`connection-state ${enabled ? 'ready' : ''}`}>
+          <span aria-hidden="true" />
+          {enabled ? 'Ready' : 'Waiting for PDF'}
+        </span>
+      </div>
+
       <div className="chat-messages">
         {messages.length === 0 && !loading && (
-          <div className="placeholder">Ask a question about the uploaded PDF</div>
+          <div className="chat-empty">
+            <div className="chat-empty-mark" aria-hidden="true">AI</div>
+            <strong>{enabled ? 'Your document is ready' : 'Start with a PDF'}</strong>
+            <p>{enabled ? 'Ask a question and get an answer grounded in the document.' : 'Upload a document to begin asking questions.'}</p>
+          </div>
         )}
 
         {messages.map((msg, i) => (
@@ -72,10 +92,18 @@ export default function ChatPanel({ enabled, onBusy, disabled, onJumpToPage }) {
           </div>
         ))}
 
-        {loading && <div className="chat-message assistant"><div className="message-content">Thinking…</div></div>}
+        {loading && (
+          <div className="chat-message assistant is-loading">
+            <div className="message-role">Assistant</div>
+            <div className="thinking-dots" aria-label="Thinking">
+              <span /><span /><span />
+            </div>
+          </div>
+        )}
+        <div ref={messagesEndRef} />
       </div>
 
-      {error && <p role="alert">{error}</p>}
+      {error && <p className="chat-error" role="alert">{error}</p>}
 
       <form onSubmit={handleSubmit} className="chat-form">
         <textarea
@@ -84,6 +112,7 @@ export default function ChatPanel({ enabled, onBusy, disabled, onJumpToPage }) {
           onChange={e => setMessage(e.target.value)}
           placeholder="Your question…"
           disabled={!enabled || disabled}
+          rows={2}
         />
         <button type="submit" disabled={!message.trim() || loading || !enabled || disabled}>
           Ask

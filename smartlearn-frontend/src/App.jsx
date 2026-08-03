@@ -36,9 +36,17 @@ export default function App() {
 
   return (
     <main className="day3-layout">
-      <h1 className="app-title">SmartLearn</h1>
+      <header className="app-header">
+        <div className="brand-block">
+          <div className="brand-mark" aria-hidden="true">S</div>
+          <div>
+            <h1 className="app-title">SmartLearn</h1>
+            <p className="app-subtitle">Explore your documents with AI</p>
+          </div>
+        </div>
 
-      <PdfUploader upload={upload} busy={busy} onUpload={handleUpload} />
+        <PdfUploader upload={upload} busy={busy} onUpload={handleUpload} />
+      </header>
 
       <div className="workspace">
         <PdfPreview upload={upload} activePage={activePage} previewKey={uploadKey} />
@@ -51,8 +59,8 @@ export default function App() {
         />
       </div>
 
-      {status && <p className="status-line">{status}</p>}
-      {error && <p role="alert">{error}</p>}
+      {status && <p className="status-line" role="status">{status}</p>}
+      {error && <p className="app-error" role="alert">{error}</p>}
     </main>
   )
 }

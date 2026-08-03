@@ -20,7 +20,11 @@ export default function PdfPreview({ upload, activePage, previewKey }) {
   return (
     <section className="pdf-preview">
       <div className="preview-toolbar">
-        <span>Page {activePage}</span>
+        <div>
+          <span className="panel-eyebrow">Document</span>
+          <strong>{upload.filename}</strong>
+        </div>
+        <span className="page-indicator">Page {activePage}</span>
       </div>
       <iframe
         key={`${previewKey}-${activePage}`}
