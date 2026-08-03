@@ -2,11 +2,16 @@ import os
 
 from fastapi import FastAPI, File, UploadFile, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from pypdf.errors import PyPdfError
 
-from services.llm import answer_from_pages
-from services.pdf import extract_pages
+from services.rag import (
+    answer_chat_turn,
+    build_upload_response,
+    extract_pages_from_bytes_for_rag,
+    prepare_rag_chat_record,
+)
 
 app = FastAPI(title="SmartLearn Lite API")
 
@@ -25,8 +30,12 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
 )
 
-# 内存存储，按 chat_id 组织
-chat_store: dict[str, list[dict]] = {}
+# 内存存储，按 chat_id 组织 (Day 3: 存储 RAG 文档记录而非页面列表)
+documents: dict[str, dict] = {}
+
+UPLOAD_ROOT = os.path.join(
+    os.path.dirname(__file__), "uploads",
+)
 
 
 class ChatRequest(BaseModel):
@@ -50,30 +59,54 @@ async def upload_pdf(chat_id: str = Query(...), file: UploadFile = File(...)):
     if not contents:
         raise HTTPException(status_code=400, detail="Uploaded file is empty")
 
+    # Validate PDF
     try:
-        pages = extract_pages(contents)
+        pages = extract_pages_from_bytes_for_rag(contents)
     except PyPdfError:
         raise HTTPException(status_code=400, detail="File is not a valid PDF")
-    except ValueError:
-        raise HTTPException(status_code=400, detail="PDF exceeds 30 page limit")
 
-    total_chars = sum(len(p["text"]) for p in pages)
+    if not pages or sum(len(p["text"]) for p in pages) == 0:
+        raise HTTPException(
+            status_code=422,
+            detail="PDF contains no extractable text — OCR is not supported",
+        )
 
-    if total_chars == 0:
-        raise HTTPException(status_code=422, detail="PDF contains no extractable text — OCR is not supported")
+    # Build the Day 3 RAG record
+    try:
+        record = prepare_rag_chat_record(
+            chat_id=chat_id,
+            filename=file.filename or "upload.pdf",
+            pdf_bytes=contents,
+            pages=pages,
+            upload_root=UPLOAD_ROOT,
+            artifact_root=os.path.join(
+                os.path.dirname(__file__), "artifacts", "rag",
+            ),
+        )
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=f"Upstream LLM error: {e}")
 
-    chat_store[chat_id] = pages
-    return {
-        "status": "ok",
-        "filename": file.filename,
-        "pages": len(pages),
-        "characters": total_chars,
-    }
+    documents[chat_id] = record
+    return build_upload_response(record)
+
+
+@app.get("/documents/{chat_id}/file")
+async def serve_pdf(chat_id: str):
+    """Serve the uploaded PDF so the frontend preview can open it."""
+    if chat_id not in documents:
+        raise HTTPException(
+            status_code=404,
+            detail="No PDF uploaded for this chat_id",
+        )
+    saved_path = documents[chat_id].get("saved_pdf_path")
+    if not saved_path or not os.path.isfile(saved_path):
+        raise HTTPException(status_code=404, detail="Saved PDF file not found")
+    return FileResponse(saved_path, media_type="application/pdf")
 
 
 @app.post("/chat")
 async def chat(chat_id: str = Query(...), body: ChatRequest = ...):
-    if chat_id not in chat_store:
+    if chat_id not in documents:
         raise HTTPException(
             status_code=404,
             detail="No PDF uploaded for this chat_id — upload a PDF first",
@@ -83,11 +116,13 @@ async def chat(chat_id: str = Query(...), body: ChatRequest = ...):
         raise HTTPException(status_code=400, detail="Message cannot be empty")
 
     try:
-        answer = answer_from_pages(chat_store[chat_id], body.message)
+        result = answer_chat_turn(documents[chat_id], body.message)
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=f"Upstream LLM error: {e}")
 
     return {
         "chat_id": chat_id,
-        "answer": answer,
+        "answer": result["answer"],
+        "citations": result["citations"],
+        "sources": result["sources"],
     }

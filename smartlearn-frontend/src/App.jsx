@@ -1,11 +1,13 @@
 import { useState } from 'react'
-import { uploadPDF, askQuestion } from './api.js'
+import { uploadPDF } from './api.js'
 import PdfUploader from './PdfUploader.jsx'
 import ChatPanel from './ChatPanel.jsx'
+import PdfPreview from './PdfPreview.jsx'
 
 export default function App() {
   const [upload, setUpload] = useState(null)
-  const [answer, setAnswer] = useState(null)
+  const [activePage, setActivePage] = useState(1)
+  const [uploadKey, setUploadKey] = useState(0)
   const [status, setStatus] = useState('')
   const [error, setError] = useState(null)
 
@@ -16,10 +18,11 @@ export default function App() {
     setStatus('Uploading…')
     setError(null)
     setUpload(null)
-    setAnswer(null)
     try {
       const result = await uploadPDF(file)
       setUpload(result)
+      setActivePage(1)
+      setUploadKey(k => k + 1)  // remount chat panel
     } catch (e) {
       setError(e.message)
     } finally {
@@ -27,47 +30,29 @@ export default function App() {
     }
   }
 
-  async function handleAsk(message) {
-    if (!message || busy) return
-    setStatus('Asking…')
-    setError(null)
-    setAnswer(null)
-    try {
-      const result = await askQuestion(message)
-      setAnswer({ text: result.answer, citations: parseCitations(result.answer) })
-    } catch (e) {
-      setError(e.message)
-    } finally {
-      setStatus('')
-    }
+  function handleJumpToPage(page) {
+    setActivePage(page)
   }
 
   return (
-    <main>
-      <h1>SmartLearn</h1>
+    <main className="day3-layout">
+      <h1 className="app-title">SmartLearn</h1>
 
       <PdfUploader upload={upload} busy={busy} onUpload={handleUpload} />
 
-      {status && <p>{status}</p>}
+      <div className="workspace">
+        <PdfPreview upload={upload} activePage={activePage} previewKey={uploadKey} />
+        <ChatPanel
+          key={uploadKey}
+          enabled={!!upload}
+          onBusy={(b) => setStatus(b ? 'Asking…' : '')}
+          disabled={busy}
+          onJumpToPage={handleJumpToPage}
+        />
+      </div>
 
+      {status && <p className="status-line">{status}</p>}
       {error && <p role="alert">{error}</p>}
-
-      {upload && <ChatPanel answer={answer} busy={busy} onAsk={handleAsk} />}
     </main>
   )
-}
-
-function parseCitations(text) {
-  const seen = new Set()
-  const pages = []
-  const regex = /\[Page (\d+)\]/g
-  let match
-  while ((match = regex.exec(text)) !== null) {
-    const page = parseInt(match[1], 10)
-    if (!seen.has(page)) {
-      seen.add(page)
-      pages.push(page)
-    }
-  }
-  return pages
 }
